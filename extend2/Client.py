@@ -38,7 +38,8 @@ class Client:
 		self.connectToServer()
 		self.frameNbr = 0
 		self.workingThread=None
-		
+		if self.state == self.INIT:
+			self.sendRtspRequest(self.SETUP)
 		
 	def createWidgets(self):
 		"""Build GUI."""
@@ -116,9 +117,9 @@ class Client:
 	
 	def playMovie(self):
 		"""Play button handler."""
-		if self.state==self.INIT:
-			self.setupMovie()
-			self.state=self.READY
+		# if self.state==self.INIT:
+		# 	self.setupMovie()
+		# 	self.state=self.READY
 		if self.state == self.READY:
 			# Create a new thread to listen for RTP packets
 			if self.workingThread is  None:
@@ -127,6 +128,7 @@ class Client:
 			self.playEvent = threading.Event()
 			self.playEvent.clear()
 			self.sendRtspRequest(self.PLAY)
+
 	
 	def getDescription(self):
 		self.sendRtspRequest(self.DESCRIBE)
@@ -376,7 +378,6 @@ class Client:
 		# Set the timeout value of the socket to 0.5sec
 		# ...
 		self.rtpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) #create new socket like init socket
-		#self.rtspSocket.settimeout(0.5)
 		try:
 			# Bind the socket to the address using the RTP port given by the client user
 			# ...
