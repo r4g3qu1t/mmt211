@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "python",
+      "request": "launch",
+      "name": "Server",
+      "program": "${workspaceFolder}/Server.py",
+      "args": ["1200"]
+    },
+    {
+      "type": "python",
+      "request": "launch",
+      "name": "Client",
+      "program": "${workspaceFolder}/ClientLauncher.py",
+      "args": ["DESKTOP-5D338PT", "1200", "1201", "movie.Mjpeg"]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Server/Client",
+      "configurations": ["Server", "Client"]
+    }
+  ]
+}
