@@ -12,13 +12,14 @@ class Client:
 	INIT = 0
 	READY = 1
 	PLAYING = 2
+	SWITCHING=3
 	state = INIT
 	
 	SETUP = 0
 	PLAY = 1
 	PAUSE = 2
 	TEARDOWN = 3
-	DESCRIBE=4
+	SWITCH=4
 	BACKWARD=5
 	FORWARD=6
 	
@@ -48,6 +49,7 @@ class Client:
 		self.endTime=0
 		self.rtspSocket=None
 		start=time.time()
+		self.listeningThread=None
 		while self.state==self.INIT:
 			
 			self.sendRtspRequest(self.SETUP)
@@ -56,6 +58,14 @@ class Client:
 			if end-start>30: 
 				print("Can't connect to server")
 				break
+
+		self.videoName=Entry(self.master)
+		self.videoName.insert(0,self.fileName)
+		self.videoName.grid(row=2, column=0, padx=2, pady=2)
+		self.videoName['state']='disabled'
+		self.submitBut=Button(self.master,width=20, padx=3, pady=3,text='submit',state='disabled')
+		self.submitBut["command"]=self.setupMovie
+		self.submitBut.grid(row=2, column=3, padx=2, pady=2)
 	def createWidgets(self):
 		"""Build GUI."""
 		buttonIdx=0
@@ -104,12 +114,13 @@ class Client:
 		buttonIdx+=1
 		
 		# get description
-		self.describe = Button(self.master, width=20, padx=3, pady=3)
-		self.describe["text"] = "describe"
-		self.describe["command"] =  self.getDescription
-		self.describe.grid(row=1, column=buttonIdx, padx=2, pady=2)
+		self.switchBut = Button(self.master, width=20, padx=3, pady=3)
+		self.switchBut["text"] = "Switch"
+		self.switchBut["command"] =  self.getVideoList
+		self.switchBut.grid(row=1, column=buttonIdx, padx=2, pady=2)
 		buttonIdx+=1
 		
+
 		# Create a label to display the movie
 		self.label = Label(self.master, height=19)
 		self.label.grid(row=0, column=0, columnspan=4, sticky=W+E+N+S, padx=5, pady=5)
@@ -117,6 +128,11 @@ class Client:
 
 	def setupMovie(self):
 		"""Setup button handler."""
+		self.fileName=self.videoName.get()
+		self.videoName['state']='disabled'
+		self.submitBut['state']='disabled'
+		if self.state==self.SWITCHING:
+			self.state=self.INIT 
 		if self.state == self.INIT:
 			self.sendRtspRequest(self.SETUP)
 	
@@ -147,8 +163,8 @@ class Client:
 			self.playEvent.clear()
 			self.sendRtspRequest(self.PLAY)
 	
-	def getDescription(self):
-		self.sendRtspRequest(self.DESCRIBE)
+	def getVideoList(self):
+		self.sendRtspRequest(self.SWITCH)
 	
 	def forward(self):
 		if self.state==self.READY or self.state==self.PLAYING:
@@ -222,7 +238,9 @@ class Client:
 		if requestCode == self.SETUP and self.state == self.INIT:
 			if self.rtspSocket is None:
 				self.connectToServer()
-			threading.Thread(target=self.recvRtspReply).start()
+			if self.listeningThread is None:
+				self.listeningThread=threading.Thread(target=self.recvRtspReply)
+				self.listeningThread.start()
 			self.rtspSeq += 1
 			if self.sessionId==0:
 				session='\n'
@@ -274,15 +292,15 @@ class Client:
 			self.requestSent = self.TEARDOWN
 			self.packetcounter+=1
 		
-		#describe request
-		elif requestCode==self.DESCRIBE:
+		#SWITCH request
+		elif requestCode==self.SWITCH:
 			self.rtspSeq = self.rtspSeq + 1
-			self.requestSent = self.DESCRIBE
-			request = 	("DESCRIBE " + str(self.fileName) + " RTSP/1.0\n"
+			self.requestSent = self.SWITCH
+			request = 	("SWITCH " + str(self.fileName) + " RTSP/1.0\n"
 						+"CSeq: "+str(self.rtspSeq) + "\n"
 						+"Sesssion: " + str(self.sessionId))
 			self.rtspSocket.send(request.encode())
-			# print(('-'*60 + "\nDescribe request sent to Server...\n" + '-'*60))
+			# print(('-'*60 + "\nSWITCH request sent to Server...\n" + '-'*60))
 			self.packetcounter+=1
 		
 		#backward request
@@ -352,7 +370,8 @@ class Client:
 						self.state = self.READY
 						# Open RTP port.
 						# print("Setting Up RtpPort for Video Stream")
-						self.openRtpPort() 
+						if self.rtpSocket is None:
+							self.openRtpPort() 
 					elif self.requestSent == self.PLAY:
 						# self.state = ...
 						if self.state==self.READY:
@@ -369,9 +388,15 @@ class Client:
 						self.state=self.INIT
 						# Flag the teardownAcked to close the socket.
 						self.teardownAcked = 1 
-					elif self.requestSent==self.DESCRIBE:
+					elif self.requestSent==self.SWITCH:
 						self.data=data
+						print("\n"+'-'*20+"Choose your video"+"-"*20)
 						print(data)
+						self.state=self.SWITCHING
+						self.videoName['state']='normal'
+						self.submitBut['state']='normal'
+						if self.playEvent: self.playEvent.set()
+						self.frameNbr=0
 					elif self.requestSent==self.BACKWARD:
 						self.frameNbr=max(self.frameNbr-10,0)
 						if self.frameNbr<=0: self.backBut['state']="disabled"

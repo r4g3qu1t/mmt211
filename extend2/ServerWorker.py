@@ -10,7 +10,7 @@ class ServerWorker:
 	PLAY = 'PLAY'
 	PAUSE = 'PAUSE'
 	TEARDOWN = 'TEARDOWN'
-	DESCRIBE="DESCRIBE"	
+	SWITCH="SWITCH"	
 	SETPAR="SET_PARAMETER"
 	INIT = 0
 	READY = 1
@@ -45,12 +45,15 @@ class ServerWorker:
 					
 			try:
 				self.clientInfo['videoStream'] = VideoStream(self.fileName)
+				if self.clientInfo:
+					self.clientInfo['videoStream'].setFrame(0)
 				self.state = self.READY
 			except IOError:
 				self.replyRtsp(self.FILE_NOT_FOUND_404, seq[1])
 					
 				# Generate a randomized RTSP session ID
-			self.clientInfo['session'] = randint(100000, 999999)
+			if 'session' not in self.clientInfo: 
+				self.clientInfo['session'] = randint(100000, 999999)
 					
 				# Send RTSP reply
 			self.replyRtsp(self.OK_200, seq[1])
@@ -88,14 +91,16 @@ class ServerWorker:
 			
 			# Close the RTP socket
 		self.clientInfo['rtpSocket'].close()
-	def processDescribeRequest(self,seq):
-		print("Processing describe\n")
-		cont = ("v=0\nm=video " + str(self.clientInfo['rtpPort']) + " RTP/AVP 26\na=control:streamid="
-			+ str(self.clientInfo['session']) +"\na=mimetype:string;\"video/Mjpeg\"\n"
-			+ "Content-Base: " + str(self.clientInfo['videoStream'].filename))
+	def processSwitchRequest(self,seq):
+		print("Processing SWITCH\n")
+		cont = ("List of 2 video: "
+				+'\n-movie.Mjpeg'
+				+'\n-movie1.MJpeg')
 		cont=cont+( "\nContent-Length: " 
 			+ str(len(cont)) + "\n")
 		self.replySdp(self.OK_200,seq[1],cont)
+		self.state=self.INIT
+		if 'event' in self.clientInfo: self.clientInfo['event'].set()
 	def processBackwardRequest(self,seq,request):
 		print("Processing Backward\n")
 		# Create a new socket for RTP/UDP
@@ -103,7 +108,7 @@ class ServerWorker:
 		header,val=request[3].split(' ')
 		if self.clientInfo:
 			self.clientInfo['videoStream'].setFrame(int(val))
-	
+
 	def processRtspRequest(self, data):
 		"""Process RTSP request sent from the client."""
 		# Get the request type
@@ -133,9 +138,9 @@ class ServerWorker:
 		# Process TEARDOWN request
 		elif requestType == self.TEARDOWN:
 			self.processTeardownRequest(seq)
-		#process describe request
-		elif requestType==self.DESCRIBE:
-			self.processDescribeRequest(seq)
+		#process switch request
+		elif requestType==self.SWITCH:
+			self.processSwitchRequest(seq)
 
 		# Create a new thread and start sending RTP packets
 	def replySdp(self,code,seq,content):
